@@ -11,7 +11,7 @@ echo "Install script patched"
 sudo bash install.sh --accept-all-defaults
 sudo python3 -m pip install oci_cli --break-system-packages
 (crontab -l 2>/dev/null; echo '*/10 * * * * bash /root/gpumon/halt_it.sh | tee -a /tmp/halt_it_log.txt') | crontab -
-sudo git clone https://github.com/autobrains/gpumon-oci.git /root/gpumon
+#sudo git clone https://github.com/autobrains/gpumon-oci.git /root/gpumon
 sudo rm -f /etc/systemd/system/gpumon.service
 sudo touch /etc/systemd/system/gpumon.service
 sudo chmod 664 /etc/systemd/system/gpumon.service
