@@ -2,14 +2,31 @@
 
 function install_all(){
 
-sudo apt update -y && sudo apt install curl -y && sudo apt install -y python3-pip
-sudo apt install -y python3-pip python3-venv python3-setuptools python3-wheel
-sudo pip install psutil --break-system-packages && sudo pip install pynvml --break-system-packages
+sudo apt update -y && sudo apt install curl -y && sudo apt install -y python3-pip python3-venv python3-setuptools python3-wheel
+if sudo python3 -m pip install psutil --break-system-packages; then
+  echo "PSutil installed... it seems like"
+else
+  echo "Had issues installing psutils, debug..."
+fi 
+if sudo python3 -m pip install nvidia-ml-py --break-system-packages; then
+  echo "NVIDIA-ML-PY installed successfully"
+else
+  echo "Got error installing, will try pynvml"
+  if sudo python3 -m pip install pynvml --break-system-packages; then
+     echo "pynvml installed successfully"
+   else
+     echo "Could not install pynvml...gpumon will not function"
+  fi
+fi
 sudo curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh -o install.sh
 sudo sed -i install.sh -e "s|v3.2.1|v2.22.0|g"
 echo "Install script patched"
 sudo bash install.sh --accept-all-defaults
-sudo python3 -m pip install oci_cli --break-system-packages
+if sudo python3 -m pip install oci_cli --break-system-packages; then
+   echo "OCI cli seems to be installed"
+else
+   echo "Had issues installing OCI cli, debug..."
+fi
 (crontab -l 2>/dev/null; echo '*/10 * * * * bash /root/gpumon/halt_it.sh | tee -a /tmp/halt_it_log.txt') | crontab -
 sudo rm -f /etc/systemd/system/gpumon.service
 sudo touch /etc/systemd/system/gpumon.service
