@@ -13,7 +13,17 @@ from time import sleep
 # ---- Third-party libs ----
 import psutil
 import requests
-from pynvml import *
+try:
+    from nvidia_ml_py import *
+    nvml_available = True
+except ImportError:
+    try:
+        from pynvml import *
+        nvml_available = True
+        print("Warning: Using deprecated pynvml. Install nvidia-ml-py instead.")
+    except ImportError:
+        nvml_available = False
+        print("No NVML library available")
 
 # ---- OCI SDK ----
 try:
@@ -235,12 +245,37 @@ def oci_sum_packets_last_5m(mon_query, compartment_id, vnic_ids):
                     compartment_id=compartment_id,
                     summarize_metrics_data_details=details
                 )
+                
+                # Fix: Handle different response formats
+                if hasattr(resp, 'data'):
+                    # Standard response format
+                    metrics_data = resp.data
+                elif isinstance(resp, tuple):
+                    # Handle tuple response (common issue)
+                    if len(resp) > 0 and hasattr(resp[0], 'data'):
+                        metrics_data = resp[0].data
+                    else:
+                        print(f"Unexpected tuple format for {m}/{vid}: {resp}")
+                        continue
+                else:
+                    print(f"Unexpected response type for {m}/{vid}: {type(resp)}")
+                    continue
+                
                 # Sum all aggregated datapoints
-                for series in resp.data:
-                    for dp in series.aggregated_datapoints:
-                        total += float(dp.value or 0.0)
+                if metrics_data:
+                    for series in metrics_data:
+                        if hasattr(series, 'aggregated_datapoints') and series.aggregated_datapoints:
+                            for dp in series.aggregated_datapoints:
+                                if dp.value is not None:
+                                    total += float(dp.value)
+                                    
             except Exception as e:
                 print(f"summarize_metrics_data error for {m}/{vid}: {e}")
+                # Add more detailed error info for debugging
+                print(f"Error type: {type(e)}")
+                if hasattr(e, 'status') and hasattr(e, 'message'):
+                    print(f"Status: {e.status}, Message: {e.message}")
+                
     return int(total)
 
 # ==============================
@@ -292,7 +327,8 @@ def main():
     freeform = ident["FREEFORM_TAGS"]
 
     # OCI clients
-    #mon_query, mon_ingest, compute_client = make_oci_clients(REGION)
+    mon_query = make_oci_clients(REGION)
+    #, mon_ingest, compute_client 
 
     # Tags we rely on (use freeform tags on the instance)
     team = freeform.get("Team", "NO_TAG")
