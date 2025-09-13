@@ -3,15 +3,14 @@
 function install_all(){
 
 sudo apt update -y && sudo apt install curl -y && sudo apt install -y python3-pip
-sudo pip install psutil && sudo pip install pynvml
 sudo apt install -y python3-pip python3-venv python3-setuptools python3-wheel
+sudo pip install psutil --break-system-packages && sudo pip install pynvml --break-system-packages
 sudo curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh -o install.sh
 sudo sed -i install.sh -e "s|v3.2.1|v2.22.0|g"
 echo "Install script patched"
 sudo bash install.sh --accept-all-defaults
 sudo python3 -m pip install oci_cli --break-system-packages
 (crontab -l 2>/dev/null; echo '*/10 * * * * bash /root/gpumon/halt_it.sh | tee -a /tmp/halt_it_log.txt') | crontab -
-#sudo git clone https://github.com/autobrains/gpumon-oci.git /root/gpumon
 sudo rm -f /etc/systemd/system/gpumon.service
 sudo touch /etc/systemd/system/gpumon.service
 sudo chmod 664 /etc/systemd/system/gpumon.service
@@ -43,4 +42,5 @@ if [ "${install_date}" != "" ]; then
 else
   echo "Will run install..."
   install_all
+  echo "Install finished on:$(cat /var/log/gpumon.finished)"
 fi
