@@ -69,7 +69,7 @@ if [[ -z "${OCIREGION:-}" ]]; then
   echo "[ $(date) ] Need OCIREGION, exiting"
   exit 1
 fi
-if ! command -v oci >/dev/null 2>&1 ; then
+if ! command -v /root/bin/oci >/dev/null 2>&1 ; then
   echo "[ $(date) ] OCI CLI not found. Please install the OCI CLI and ensure instance principals are enabled."
   exit 1
 fi
