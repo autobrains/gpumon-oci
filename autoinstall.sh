@@ -3,16 +3,16 @@
 function install_all(){
 
 sudo apt update -y && sudo apt install curl -y && sudo apt install -y python3-pip python3-venv python3-setuptools python3-wheel
-if sudo python3 -m pip install psutil --break-system-packages; then
+if sudo python3 -m pip install psutil; then
   echo "PSutil installed... it seems like"
 else
   echo "Had issues installing psutils, debug..."
 fi 
-if sudo python3 -m pip install nvidia-ml-py --break-system-packages; then
+if sudo python3 -m pip install nvidia-ml-py; then
   echo "NVIDIA-ML-PY installed successfully"
 else
   echo "Got error installing, will try pynvml"
-  if sudo python3 -m pip install pynvml --break-system-packages; then
+  if sudo python3 -m pip install pynvml; then
      echo "pynvml installed successfully"
    else
      echo "Could not install pynvml...gpumon will not function"
@@ -22,7 +22,7 @@ sudo curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/ins
 sudo sed -i install.sh -e "s|v3.2.1|v2.22.0|g"
 echo "Install script patched"
 sudo bash install.sh --accept-all-defaults
-if sudo python3 -m pip install oci_cli --break-system-packages; then
+if sudo python3 -m pip install oci_cli; then
    echo "OCI cli seems to be installed"
 else
    echo "Had issues installing OCI cli, debug..."
