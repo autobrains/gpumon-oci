@@ -76,7 +76,7 @@ fi
 
 # --- Log selection logic (unchanged) ---
 if [[ -z "${DTYPE}" ]] || [[ "${DTYPE}" == "0" ]]; then
-  SEP=6
+  SEP=7
   FILE="CPUMON_LOGS_"
   STEP=500
 else
@@ -155,7 +155,7 @@ else
   # Stop via OCI CLI, using instance principals
   # Requires IAM policy for the instance's dynamic group:
   #   allow dynamic-group <DG_NAME> to use instance-family in compartment <COMPARTMENT_NAME>
-  res=$(oci compute instance action \
+  res=$(/root/bin/oci compute instance action \
     --instance-id "${INSTANCE_ID}" \
     --action STOP \
     --region "${OCIREGION}" \
