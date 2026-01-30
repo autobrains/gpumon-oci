@@ -101,6 +101,24 @@ def calc_avg_core_utilization():
     return [sum(c)/len(c) if c else 0.0 for c in core_utilization_cache]
 
 # =======================
+# Network (OS-level packets, Option A)
+# =======================
+def get_network_packets_last_interval(prev_counters, interval_sec):
+    """
+    Returns estimated total packets/sec (recv + sent) over last interval.
+    """
+    now = psutil.net_io_counters()
+    if not prev_counters:
+        return now, 0
+
+    delta_packets = (
+        (now.packets_recv - prev_counters.packets_recv) +
+        (now.packets_sent - prev_counters.packets_sent)
+    )
+    packets_per_sec = int(delta_packets / max(1, interval_sec))
+    return now, packets_per_sec
+
+# =======================
 # Logging
 # =======================
 def log_results(tmp_file_saved, team, emp_name, alarm_pilot, cpu_tripped, seconds, now, per_core, network, network_tripped):
@@ -109,7 +127,7 @@ def log_results(tmp_file_saved, team, emp_name, alarm_pilot, cpu_tripped, second
             f.write(f"[ {now} ] tag:{team},Employee:{emp_name},"
                     f"Alarm_Pilot_value:{alarm_pilot},CPU_Util_Tripped:{cpu_tripped},"
                     f"Seconds_Elapsed:{seconds},Per-Core_CPU_Util:{per_core},"
-                    f"NetworkBytes(5m):{network},Network_Tripped:{network_tripped}\n")
+                    f"NetworkPackets(5m):{network},Network_Tripped:{network_tripped}\n")
     except Exception as e:
         print(f"Error writing to file: {e}")
 
@@ -154,6 +172,10 @@ def main():
     cpu_util_tripped = False
     network_last = 99
 
+    # NEW: previous network counters + rolling window
+    prev_net_counters = None
+    network_window = []
+
     try:
         while True:
             cpu_util_tripped = False
@@ -174,8 +196,18 @@ def main():
             now = datetime.now(timezone.utc)
             seconds = round(float(seconds_elapsed()))
 
-            # placeholder: no OCI Monitoring query, use dummy value
-            network_last = 50  # you can replace with actual OS-level check if needed
+            # ===== NEW: 5-minute rolling packet window =====
+            prev_net_counters, net_pps = get_network_packets_last_interval(
+                prev_net_counters, SLEEP_INTERVAL
+            )
+
+            network_window.append(net_pps)
+            max_samples = max(1, int(300 / SLEEP_INTERVAL))
+            network_window = network_window[-max_samples:]
+
+            network_last = sum(network_window)
+            # ==============================================
+
             if network_tripped == 0 and network_last <= NETWORK_THRESHOLD:
                 network_tripped = 1
 
@@ -204,3 +236,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
