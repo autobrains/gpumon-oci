@@ -78,7 +78,7 @@ fi
 if [[ -z "${DTYPE}" ]] || [[ "${DTYPE}" == "0" ]]; then
   SEP=7
   FILE="CPUMON_LOGS_"
-  STEP=500
+  STEP=1000 #a CPU machine will also be up 4 hours when inactive
 else
   SEP=12
   FILE="GPU_TEMP_"
