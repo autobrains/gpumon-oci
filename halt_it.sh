@@ -83,9 +83,9 @@ else
   SEP=12
   FILE="GPU_TEMP_"
   if [ "${DTYPE}" -lt "4" ]; then
-    STEP=500   # single GPU → single line; 500 lines ≈ 2 hours
+    STEP=1000   # single GPU → single line; 1000 lines ≈ 4 hours
   else
-    STEP=2000  # 4 GPUs → 4 lines
+    STEP=4000  # 4 GPUs → 4 lines
   fi
 fi
 
