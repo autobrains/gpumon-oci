@@ -99,7 +99,7 @@ This instance: ${INSTANCE_ID} seems to have been idle for the last
 2 hours, will shut it down in 3 minutes from now. If you have just logged in,
 please wait a couple of minutes and start it again from the console, or run:
 
-sudo bash /root/gpumon/kill_halt.sh
+sudo date +%s > /tmp/timestamp.txt
 
 to cancel shutdown now. The shutdown pause in this case will last 2 hours,
 after which the shutdown sequence will resume.
