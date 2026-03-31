@@ -7,7 +7,6 @@ import time
 import json
 import psutil
 import requests
-import subprocess
 from datetime import datetime, timedelta, timezone
 from time import sleep
 
@@ -23,7 +22,6 @@ NETWORK_THRESHOLD_SEVERE = 200_000
 RESTART_BACKOFF_DEFAULT = 7200
 RESTART_BACKOFF_SEVERE = 600
 TMP_FILE = '/tmp/CPUMON_LOGS_'
-CRON_JOB = "*/10 * * * * /bin/bash /root/gpumon/halt_it.sh | /usr/bin/tee -a /tmp/halt_it_log.txt"
 
 # =======================
 # Helpers: IMDSv2 (OCI)
@@ -62,29 +60,6 @@ def send_slack(webhook_url, message):
             print(f"Slack webhook failed: {r.status_code}")
     except requests.RequestException as e:
         print(f"Slack error: {e}")
-
-# =======================
-# Cron seeding
-# =======================
-def check_root_crontab(search_string):
-    try:
-        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True, check=True)
-        return search_string in result.stdout
-    except subprocess.CalledProcessError:
-        return False
-
-def add_to_root_crontab(new_cron_job):
-    try:
-        current = subprocess.run(['crontab','-l'], capture_output=True, text=True, check=False).stdout
-        new_crontab = current + ("\n" if current and not current.endswith("\n") else "") + new_cron_job + "\n"
-        p = subprocess.Popen(['crontab','-'], stdin=subprocess.PIPE, text=True)
-        p.communicate(input=new_crontab)
-        if p.returncode == 0:
-            print("New cron job added successfully.")
-            return True
-    except Exception as e:
-        print(f"crontab add error: {e}")
-    return False
 
 # =======================
 # CPU sampling helpers
@@ -135,10 +110,6 @@ def log_results(tmp_file_saved, team, emp_name, alarm_pilot, cpu_tripped, second
 # Main
 # =======================
 def main():
-    if not check_root_crontab("halt_it.sh"):
-        print("Updating crontab with new halt_it.sh call")
-        add_to_root_crontab(CRON_JOB)
-
     inst = load_instance_identity()
     instance_ocid = inst.get('id', 'UNKNOWN')
     hostname = inst.get('hostname', 'UNKNOWN')

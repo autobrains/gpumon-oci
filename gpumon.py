@@ -6,7 +6,6 @@
 import os
 import time
 import json
-import subprocess
 from datetime import datetime, timedelta
 from time import sleep
 
@@ -68,31 +67,6 @@ def get_packets_last_5m():
     oldest_t, oldest_v = _net_samples[0]
     newest_t, newest_v = _net_samples[-1]
     return max(0, newest_v - oldest_v)
-
-# ==============================
-# Helpers: crontab
-# ==============================
-def check_root_crontab(search_string):
-    try:
-        result = subprocess.run(['sudo', 'crontab', '-l'], capture_output=True, text=True, check=True)
-        return search_string in result.stdout
-    except subprocess.CalledProcessError:
-        return False
-    except PermissionError:
-        print("Permission denied reading root crontab.")
-        return False
-
-def add_to_root_crontab(new_cron_job):
-    try:
-        current = subprocess.run(['sudo', 'crontab', '-l'], capture_output=True, text=True, check=True)
-        new_spec = current.stdout + new_cron_job + "\n"
-        p = subprocess.Popen(['sudo', 'crontab', '-'], stdin=subprocess.PIPE, text=True)
-        p.communicate(input=new_spec)
-        print("New cron job added successfully." if p.returncode == 0 else "Failed to add new cron job.")
-        return p.returncode == 0
-    except Exception as e:
-        print(f"Error updating root crontab: {e}")
-        return False
 
 # ==============================
 # CPU sampling
@@ -178,12 +152,6 @@ def getUtilization(handle):
 # Main
 # ==============================
 def main():
-    if check_root_crontab("halt_it.sh"):
-        print("halt_it.sh presence in crontab detected, continue")
-    else:
-        print("updating crontab with new halt_it.sh call")
-        add_to_root_crontab("*/10 * * * * bash /root/gpumon/halt_it.sh | tee -a /tmp/halt_it_log.txt")
-
     ident = get_instance_identity()
     print(ident)
     INSTANCE_ID = ident["INSTANCE_ID"]
