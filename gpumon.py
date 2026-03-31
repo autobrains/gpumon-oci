@@ -41,7 +41,7 @@ CACHE_DURATION = 300
 THRESHOLD_PERCENTAGE = 10
 sleep_interval = 10
 
-METRICS_NAMESPACE = "GPU-metrics-with-team-tag"
+METRICS_NAMESPACE = "gpu_metrics_with_team_tag"
 METRICS_INTERVAL = 60  # post metrics every N seconds
 
 # ==============================

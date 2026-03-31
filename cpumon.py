@@ -26,7 +26,7 @@ NETWORK_THRESHOLD_SEVERE = 200_000
 RESTART_BACKOFF_DEFAULT = 7200
 RESTART_BACKOFF_SEVERE = 600
 TMP_FILE = '/tmp/CPUMON_LOGS_'
-METRICS_NAMESPACE = "GPU-metrics-with-team-tag"
+METRICS_NAMESPACE = "gpu_metrics_with_team_tag"
 METRICS_INTERVAL = 60  # post metrics every N seconds
 
 # =======================
