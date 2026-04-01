@@ -155,6 +155,9 @@ else
   # Stop via OCI CLI, using instance principals
   # Requires IAM policy for the instance's dynamic group:
   #   allow dynamic-group <DG_NAME> to use instance-family in compartment <COMPARTMENT_NAME>
+  #   send SIGTERM to claude
+  pkill -SIGTERM -f "claude" 2>/dev/null
+  sleep 15
   res=$(oci compute instance action \
     --instance-id "${INSTANCE_ID}" \
     --action STOP \
