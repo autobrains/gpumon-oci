@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# Cron runs with a minimal PATH — ensure pip-installed oci CLI is reachable
+export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
 TIMESTAMP_FILE="/tmp/timestamp.txt"
 
 # --- Cooldown gate (same behavior) ---
@@ -165,4 +168,10 @@ else
     --auth instance_principal 2>&1) || true
 
   echo "[ $(date) ] debug: got result for oci compute instance action STOP: ${res}"
+
+  # Fallback: if OCI API didn't acknowledge the stop, shut down the OS directly
+  if ! echo "${res}" | grep -qi '"lifecycle-state"'; then
+    echo "[ $(date) ] OCI CLI stop unconfirmed, falling back to OS shutdown in 3 minutes"
+    shutdown -h +3 "gpumon: idle shutdown fallback" || true
+  fi
 fi
