@@ -6,8 +6,7 @@
 import os
 import time
 import json
-import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import sleep
 
 # ---- Third-party libs ----
@@ -28,6 +27,8 @@ except ImportError:
 # ---- OCI SDK ----
 try:
     import oci
+    from oci.monitoring import MonitoringClient
+    from oci.monitoring.models import PostMetricDataDetails, MetricDataDetails, Datapoint
 except ImportError:
     raise SystemExit(
         "Missing dependency: oci (OCI Python SDK). Install with: pip install oci"
@@ -40,7 +41,8 @@ CACHE_DURATION = 300
 THRESHOLD_PERCENTAGE = 10
 sleep_interval = 10
 
-my_NameSpace = "GPU-metrics-with-team-tag"
+METRICS_NAMESPACE = "gpu_metrics_with_team_tag"
+METRICS_INTERVAL = 60  # post metrics every N seconds
 
 # ==============================
 # Network via psutil (5-minute rolling packets)  <<< NEW
@@ -68,31 +70,6 @@ def get_packets_last_5m():
     oldest_t, oldest_v = _net_samples[0]
     newest_t, newest_v = _net_samples[-1]
     return max(0, newest_v - oldest_v)
-
-# ==============================
-# Helpers: crontab
-# ==============================
-def check_root_crontab(search_string):
-    try:
-        result = subprocess.run(['sudo', 'crontab', '-l'], capture_output=True, text=True, check=True)
-        return search_string in result.stdout
-    except subprocess.CalledProcessError:
-        return False
-    except PermissionError:
-        print("Permission denied reading root crontab.")
-        return False
-
-def add_to_root_crontab(new_cron_job):
-    try:
-        current = subprocess.run(['sudo', 'crontab', '-l'], capture_output=True, text=True, check=True)
-        new_spec = current.stdout + new_cron_job + "\n"
-        p = subprocess.Popen(['sudo', 'crontab', '-'], stdin=subprocess.PIPE, text=True)
-        p.communicate(input=new_spec)
-        print("New cron job added successfully." if p.returncode == 0 else "Failed to add new cron job.")
-        return p.returncode == 0
-    except Exception as e:
-        print(f"Error updating root crontab: {e}")
-        return False
 
 # ==============================
 # CPU sampling
@@ -138,6 +115,37 @@ def get_instance_identity():
     }
 
 # ==============================
+# OCI Monitoring
+# ==============================
+def make_monitoring_client(region):
+    signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+    return MonitoringClient(
+        config={"region": region},
+        signer=signer,
+        service_endpoint=f"https://telemetry-ingestion.{region}.oraclecloud.com",
+    )
+
+def post_metrics(client, compartment_id, namespace, dimensions, metrics):
+    """
+    metrics: list of (name, value) tuples
+    """
+    now = datetime.now(timezone.utc)
+    metric_data = [
+        MetricDataDetails(
+            namespace=namespace,
+            compartment_id=compartment_id,
+            name=name,
+            dimensions=dimensions,
+            datapoints=[Datapoint(timestamp=now, value=float(value))],
+        )
+        for name, value in metrics
+    ]
+    try:
+        client.post_metric_data(PostMetricDataDetails(metric_data=metric_data))
+    except Exception as e:
+        print(f"Metrics upload error: {e}")
+
+# ==============================
 # Slack (unchanged)
 # ==============================
 def send_slack(webhook_url, message):
@@ -178,12 +186,6 @@ def getUtilization(handle):
 # Main
 # ==============================
 def main():
-    if check_root_crontab("halt_it.sh"):
-        print("halt_it.sh presence in crontab detected, continue")
-    else:
-        print("updating crontab with new halt_it.sh call")
-        add_to_root_crontab("*/10 * * * * bash /root/gpumon/halt_it.sh | tee -a /tmp/halt_it_log.txt")
-
     ident = get_instance_identity()
     print(ident)
     INSTANCE_ID = ident["INSTANCE_ID"]
@@ -220,6 +222,15 @@ def main():
     global core_utilization_cache
 
     TMP_FILE_SAVED = "/tmp/GPU_TEMP_" + datetime.now().strftime('%Y-%m-%dT%H')
+
+    monitoring_client = make_monitoring_client(REGION)
+    base_dimensions = {
+        "instanceId": INSTANCE_ID,
+        "displayName": DISPLAY_NAME,
+        "team": team,
+        "employee": emp_name,
+    }
+    last_metrics_post = 0.0
 
     try:
         alarm_pilot_light = 0
@@ -294,6 +305,35 @@ def main():
                         f.write(writeString)
                 except Exception as e:
                     print(f"Log write error: {e}")
+
+            # Post to OCI Monitoring once per METRICS_INTERVAL
+            if time.time() - last_metrics_post >= METRICS_INTERVAL:
+                last_metrics_post = time.time()
+                ram = psutil.virtual_memory()
+                disk = psutil.disk_usage('/')
+                avg_cpu = sum(avg_core) / len(avg_core) if avg_core else 0.0
+
+                # Instance-level metrics
+                post_metrics(monitoring_client, COMPARTMENT_ID, METRICS_NAMESPACE, base_dimensions, [
+                    ("CpuUtilization",    avg_cpu),
+                    ("MemoryUtilization", ram.percent),
+                    ("DiskUtilization",   disk.percent),
+                    ("NetworkPackets5m",  network),
+                ])
+
+                # Per-GPU metrics
+                for i in range(deviceCount):
+                    h = nvmlDeviceGetHandleByIndex(i)
+                    _, gpu_util_m, mem_util_m = getUtilization(h)
+                    pow_w_m = getPowerDraw(h)
+                    temp_c_m = getTemp(h)
+                    gpu_dims = {**base_dimensions, "gpu": str(i)}
+                    post_metrics(monitoring_client, COMPARTMENT_ID, METRICS_NAMESPACE, gpu_dims, [
+                        ("GpuUtilization",       gpu_util_m),
+                        ("GpuMemoryUtilization", mem_util_m),
+                        ("GpuPowerDraw",         pow_w_m),
+                        ("GpuTemperature",       temp_c_m),
+                    ])
 
             sleep(sleep_interval)
     finally:

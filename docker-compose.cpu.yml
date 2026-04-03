@@ -1,0 +1,6 @@
+services:
+  gpumon:
+    deploy:
+      resources:
+        reservations:
+          devices: []

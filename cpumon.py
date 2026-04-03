@@ -7,9 +7,12 @@ import time
 import json
 import psutil
 import requests
-import subprocess
 from datetime import datetime, timedelta, timezone
 from time import sleep
+
+import oci
+from oci.monitoring import MonitoringClient
+from oci.monitoring.models import PostMetricDataDetails, MetricDataDetails, Datapoint
 
 # =======================
 # Tunables / Constants
@@ -23,7 +26,8 @@ NETWORK_THRESHOLD_SEVERE = 200_000
 RESTART_BACKOFF_DEFAULT = 7200
 RESTART_BACKOFF_SEVERE = 600
 TMP_FILE = '/tmp/CPUMON_LOGS_'
-CRON_JOB = "*/10 * * * * /bin/bash /root/gpumon/halt_it.sh | /usr/bin/tee -a /tmp/halt_it_log.txt"
+METRICS_NAMESPACE = "gpu_metrics_with_team_tag"
+METRICS_INTERVAL = 60  # post metrics every N seconds
 
 # =======================
 # Helpers: IMDSv2 (OCI)
@@ -51,6 +55,34 @@ def load_instance_identity():
     return inst or {}
 
 # =======================
+# OCI Monitoring
+# =======================
+def make_monitoring_client(region):
+    signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+    return MonitoringClient(
+        config={"region": region},
+        signer=signer,
+        service_endpoint=f"https://telemetry-ingestion.{region}.oraclecloud.com",
+    )
+
+def post_metrics(client, compartment_id, namespace, dimensions, metrics):
+    now = datetime.now(timezone.utc)
+    metric_data = [
+        MetricDataDetails(
+            namespace=namespace,
+            compartment_id=compartment_id,
+            name=name,
+            dimensions=dimensions,
+            datapoints=[Datapoint(timestamp=now, value=float(value))],
+        )
+        for name, value in metrics
+    ]
+    try:
+        client.post_metric_data(PostMetricDataDetails(metric_data=metric_data))
+    except Exception as e:
+        print(f"Metrics upload error: {e}")
+
+# =======================
 # Slack
 # =======================
 def send_slack(webhook_url, message):
@@ -62,29 +94,6 @@ def send_slack(webhook_url, message):
             print(f"Slack webhook failed: {r.status_code}")
     except requests.RequestException as e:
         print(f"Slack error: {e}")
-
-# =======================
-# Cron seeding
-# =======================
-def check_root_crontab(search_string):
-    try:
-        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True, check=True)
-        return search_string in result.stdout
-    except subprocess.CalledProcessError:
-        return False
-
-def add_to_root_crontab(new_cron_job):
-    try:
-        current = subprocess.run(['crontab','-l'], capture_output=True, text=True, check=False).stdout
-        new_crontab = current + ("\n" if current and not current.endswith("\n") else "") + new_cron_job + "\n"
-        p = subprocess.Popen(['crontab','-'], stdin=subprocess.PIPE, text=True)
-        p.communicate(input=new_crontab)
-        if p.returncode == 0:
-            print("New cron job added successfully.")
-            return True
-    except Exception as e:
-        print(f"crontab add error: {e}")
-    return False
 
 # =======================
 # CPU sampling helpers
@@ -135,10 +144,6 @@ def log_results(tmp_file_saved, team, emp_name, alarm_pilot, cpu_tripped, second
 # Main
 # =======================
 def main():
-    if not check_root_crontab("halt_it.sh"):
-        print("Updating crontab with new halt_it.sh call")
-        add_to_root_crontab(CRON_JOB)
-
     inst = load_instance_identity()
     instance_ocid = inst.get('id', 'UNKNOWN')
     hostname = inst.get('hostname', 'UNKNOWN')
@@ -166,6 +171,16 @@ def main():
 
     timestamp_hour = datetime.now().strftime('%Y-%m-%dT%H')
     tmp_file_saved = TMP_FILE + timestamp_hour
+
+    monitoring_client = make_monitoring_client(inst.get('canonicalRegionName') or inst.get('region', 'eu-frankfurt-1'))
+    compartment_id = inst.get('compartmentId', '')
+    base_dimensions = {
+        "instanceId": instance_ocid,
+        "displayName": display_name,
+        "team": team,
+        "employee": emp_name,
+    }
+    last_metrics_post = 0.0
 
     alarm_pilot_light = 0
     network_tripped = 0
@@ -229,6 +244,19 @@ def main():
 
             log_results(tmp_file_saved, team, emp_name, alarm_pilot_light, cpu_util_tripped,
                         seconds, now, per_core, network_last, network_tripped)
+
+            # Post to OCI Monitoring once per METRICS_INTERVAL
+            if time.time() - last_metrics_post >= METRICS_INTERVAL:
+                last_metrics_post = time.time()
+                ram = psutil.virtual_memory()
+                disk = psutil.disk_usage('/')
+                avg_cpu = sum(avg_util) / len(avg_util) if avg_util else 0.0
+                post_metrics(monitoring_client, compartment_id, METRICS_NAMESPACE, base_dimensions, [
+                    ("CpuUtilization",    avg_cpu),
+                    ("MemoryUtilization", ram.percent),
+                    ("DiskUtilization",   disk.percent),
+                    ("NetworkPackets5m",  network_last),
+                ])
 
             sleep(SLEEP_INTERVAL)
     finally:

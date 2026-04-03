@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# Cron runs with a minimal PATH — ensure pip-installed oci CLI is reachable
+export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
 TIMESTAMP_FILE="/tmp/timestamp.txt"
 
 # --- Cooldown gate (same behavior) ---
@@ -69,9 +72,18 @@ if [[ -z "${OCIREGION:-}" ]]; then
   echo "[ $(date) ] Need OCIREGION, exiting"
   exit 1
 fi
-if ! command -v /root/bin/oci >/dev/null 2>&1 ; then
-  echo "[ $(date) ] OCI CLI not found. Please install the OCI CLI and ensure instance principals are enabled."
-  exit 1
+# Resolve oci CLI: prefer local, fall back to running it inside the gpumon container
+OCI_CMD=""
+if command -v oci >/dev/null 2>&1; then
+  OCI_CMD="oci"
+else
+  GPUMON_CONTAINER=$(docker ps -q --filter name=gpumon 2>/dev/null | head -1 || true)
+  if [ -n "${GPUMON_CONTAINER}" ]; then
+    OCI_CMD="docker exec ${GPUMON_CONTAINER} oci"
+    echo "[ $(date) ] oci not found locally, will use container ${GPUMON_CONTAINER}"
+  else
+    echo "[ $(date) ] oci CLI not found and no gpumon container running — will rely on OS shutdown only"
+  fi
 fi
 
 # --- Log selection logic (unchanged) ---
@@ -152,14 +164,21 @@ else
   sleep 180
   wall "[ $(date) ] Well, 3 minutes have passed, shutdown is now... Bye Bye"
 
-  # Stop via OCI CLI, using instance principals
-  # Requires IAM policy for the instance's dynamic group:
-  #   allow dynamic-group <DG_NAME> to use instance-family in compartment <COMPARTMENT_NAME>
-  res=$(/root/bin/oci compute instance action \
-    --instance-id "${INSTANCE_ID}" \
-    --action STOP \
-    --region "${OCIREGION}" \
-    --auth instance_principal 2>&1) || true
+  # Signal claude to exit gracefully before shutdown
+  pkill -SIGTERM -f "claude" 2>/dev/null || true
+  sleep 15
 
-  echo "[ $(date) ] debug: got result for oci compute instance action STOP: ${res}"
+  # Attempt OCI API stop (clean cloud-side stop, avoids reboot-on-crash behaviour)
+  if [ -n "${OCI_CMD}" ]; then
+    res=$(${OCI_CMD} compute instance action \
+      --instance-id "${INSTANCE_ID}" \
+      --action STOP \
+      --region "${OCIREGION}" \
+      --auth instance_principal 2>&1) || true
+    echo "[ $(date) ] debug: OCI API stop result: ${res}"
+  fi
+
+  # Always shut down the OS — this stops the instance even if the API call failed
+  echo "[ $(date) ] Executing OS shutdown now"
+  shutdown -h now || true
 fi
