@@ -13,11 +13,19 @@ from time import sleep
 import psutil
 import requests
 try:
-    from nvidia_ml_py import *
+    from nvidia_ml_py import (
+        nvmlInit, nvmlShutdown, nvmlDeviceGetCount, nvmlDeviceGetHandleByIndex,
+        nvmlDeviceGetPowerUsage, nvmlDeviceGetTemperature, nvmlDeviceGetUtilizationRates,
+        NVMLError, NVML_TEMPERATURE_GPU,
+    )
     nvml_available = True
 except ImportError:
     try:
-        from pynvml import *
+        from pynvml import (  # type: ignore[no-redef]
+            nvmlInit, nvmlShutdown, nvmlDeviceGetCount, nvmlDeviceGetHandleByIndex,
+            nvmlDeviceGetPowerUsage, nvmlDeviceGetTemperature, nvmlDeviceGetUtilizationRates,
+            NVMLError, NVML_TEMPERATURE_GPU,
+        )
         nvml_available = True
         print("Warning: Using deprecated pynvml. Install nvidia-ml-py instead.")
     except ImportError:
