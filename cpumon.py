@@ -112,20 +112,20 @@ def calc_avg_core_utilization():
 # =======================
 # Network (OS-level packets, Option A)
 # =======================
-def get_network_packets_last_interval(prev_counters, interval_sec):
+def get_network_packets_last_interval(prev_counters):
     """
-    Returns estimated total packets/sec (recv + sent) over last interval.
+    Returns raw packet delta (recv + sent) since the last sample.
+    Summing these over the window gives total packets in that period,
+    matching the approach used in gpumon.py.
     """
     now = psutil.net_io_counters()
     if not prev_counters:
         return now, 0
-
     delta_packets = (
         (now.packets_recv - prev_counters.packets_recv) +
         (now.packets_sent - prev_counters.packets_sent)
     )
-    packets_per_sec = int(delta_packets / max(1, interval_sec))
-    return now, packets_per_sec
+    return now, max(0, delta_packets)
 
 # =======================
 # Logging
@@ -212,9 +212,7 @@ def main():
             seconds = round(float(seconds_elapsed()))
 
             # ===== NEW: 5-minute rolling packet window =====
-            prev_net_counters, net_pps = get_network_packets_last_interval(
-                prev_net_counters, SLEEP_INTERVAL
-            )
+            prev_net_counters, net_pps = get_network_packets_last_interval(prev_net_counters)
 
             network_window.append(net_pps)
             max_samples = max(1, int(300 / SLEEP_INTERVAL))
