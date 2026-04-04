@@ -95,11 +95,7 @@ if [[ -z "${DTYPE}" ]] || [[ "${DTYPE}" == "0" ]]; then
 else
   SEP=12
   FILE="GPU_TEMP_"
-  if [ "${DTYPE}" -lt "4" ]; then
-    STEP=1000   # single GPU → single line; 1000 lines ≈ 4 hours
-  else
-    STEP=4000  # 4 GPUs → 4 lines
-  fi
+  STEP=$(( 1000 * DTYPE ))  # each GPU writes one line per loop iteration; scale with count
 fi
 
 # --- No AWS CLI checks; we operate with OCI CLI only ---
