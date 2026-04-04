@@ -7,7 +7,7 @@ Idle-detection and auto-shutdown for OCI GPU and CPU instances. Monitors CPU, GP
 Run as root (or with sudo) on a fresh Ubuntu instance:
 
 ```bash
-sudo git clone https://github.com/autobrains/gpumon-oci.git /root/gpumon/ && sudo bash /root/gpumon/autoinstall.sh
+sudo git clone https://github.com/autobrains/gpumon-oci.git /root/gpumon-oci/ && sudo bash /root/gpumon-oci/autoinstall.sh
 ```
 
 `autoinstall.sh` is idempotent — re-running it on an already-installed instance is a no-op.
@@ -27,30 +27,30 @@ sudo git clone https://github.com/autobrains/gpumon-oci.git /root/gpumon/ && sud
 Copy `.env.example` to `.env` and fill in your webhook URLs before (or just after) running the installer:
 
 ```bash
-cp /root/gpumon/.env.example /root/gpumon/.env
-# edit /root/gpumon/.env and set DEBUG_WEBHOOK_URL and/or <TEAM>_TEAM_WEBHOOK_URL
+cp /root/gpumon-oci/.env.example /root/gpumon-oci/.env
+# edit /root/gpumon-oci/.env and set DEBUG_WEBHOOK_URL and/or <TEAM>_TEAM_WEBHOOK_URL
 ```
 
 Then restart the container:
 
 ```bash
-docker compose -f /root/gpumon/docker-compose.yml up -d
+docker compose -f /root/gpumon-oci/docker-compose.yml up -d
 ```
 
 ## Manual Docker commands
 
 ```bash
 # GPU instance
-docker compose -f /root/gpumon/docker-compose.yml up -d --build
+docker compose -f /root/gpumon-oci/docker-compose.yml up -d --build
 
 # CPU-only instance
-docker compose -f /root/gpumon/docker-compose.yml -f /root/gpumon/docker-compose.cpu.yml up -d --build
+docker compose -f /root/gpumon-oci/docker-compose.yml -f /root/gpumon-oci/docker-compose.cpu.yml up -d --build
 
 # Logs
-docker compose -f /root/gpumon/docker-compose.yml logs -f
+docker compose -f /root/gpumon-oci/docker-compose.yml logs -f
 
 # Stop
-docker compose -f /root/gpumon/docker-compose.yml down
+docker compose -f /root/gpumon-oci/docker-compose.yml down
 ```
 
 ## Cancelling a pending shutdown
@@ -67,7 +67,7 @@ This resets the 2-hour cooldown timer and cancels the current shutdown sequence.
 
 ```bash
 # Monitor logs
-docker compose -f /root/gpumon/docker-compose.yml logs -f
+docker compose -f /root/gpumon-oci/docker-compose.yml logs -f
 
 # halt_it.sh cron output
 tail -f /var/log/halt_it.log

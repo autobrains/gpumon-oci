@@ -2,7 +2,7 @@
 set -euo pipefail
 
 INSTALL_LOG="/var/log/gpumon.finished"
-REPO_DIR="/root/gpumon"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 install_all() {
     # ---- Base dependencies (git, cron) ----
