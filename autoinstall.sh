@@ -22,6 +22,11 @@ install_all() {
     else
         echo "[ $(date) ] Docker already installed: $(docker --version)"
     fi
+    # Ensure the compose plugin is present — Ubuntu-repo docker does not bundle it
+    if ! docker compose version > /dev/null 2>&1; then
+        echo "[ $(date) ] docker compose plugin not found, installing..."
+        apt-get update && apt-get install -y --no-install-recommends docker-compose-plugin
+    fi
     systemctl enable --now docker
     # Wait for the daemon to be ready before running compose
     timeout 30 sh -c 'until docker info > /dev/null 2>&1; do sleep 1; done' \
