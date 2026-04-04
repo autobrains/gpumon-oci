@@ -47,7 +47,7 @@ install_all() {
                 sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
                 tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
             apt-get update && apt-get install -y nvidia-container-toolkit
-            nvidia-ctk runtime configure --runtime=docker
+            nvidia-ctk runtime configure --runtime=docker --set-as-default
             systemctl restart docker
             timeout 30 sh -c 'until docker info > /dev/null 2>&1; do sleep 1; done' \
                 || { echo "[ $(date) ] ERROR: Docker daemon did not restart in time after NVIDIA config"; exit 1; }

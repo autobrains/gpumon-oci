@@ -262,7 +262,11 @@ def main():
 
             total_gpu_util = 0.0
             for i in range(deviceCount):
-                h = nvmlDeviceGetHandleByIndex(i)
+                try:
+                    h = nvmlDeviceGetHandleByIndex(i)
+                except NVMLError as e:
+                    print(f"nvmlDeviceGetHandleByIndex({i}) error: {e}")
+                    continue
                 util, gpu_util, mem_util = getUtilization(h)
                 total_gpu_util += gpu_util
 
@@ -295,7 +299,11 @@ def main():
                 alarm_pilot_light = 0
 
             for i in range(deviceCount):
-                h = nvmlDeviceGetHandleByIndex(i)
+                try:
+                    h = nvmlDeviceGetHandleByIndex(i)
+                except NVMLError as e:
+                    print(f"nvmlDeviceGetHandleByIndex({i}) error: {e}")
+                    continue
                 util, gpu_util, mem_util = getUtilization(h)
                 pow_w = getPowerDraw(h)
                 temp_c = getTemp(h)
