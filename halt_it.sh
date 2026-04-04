@@ -1,3 +1,4 @@
+#!/bin/bash
 # (c) Paul Seifer, Autobrains LTD — OCI refactor
 
 set -euo pipefail
