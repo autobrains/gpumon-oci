@@ -32,6 +32,7 @@ install_all() {
             > /etc/apt/sources.list.d/docker.list
         apt-get update && apt-get install -y --no-install-recommends docker-compose-plugin
     fi
+    systemctl enable --now docker.socket
     systemctl enable --now docker
     # Wait for the daemon to be ready before running compose
     timeout 30 sh -c 'until docker info > /dev/null 2>&1; do sleep 1; done' \
